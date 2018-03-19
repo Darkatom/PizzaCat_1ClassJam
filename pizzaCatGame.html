@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>    
+    <head>
+            <title>Pizza Cat</title>
+            <style>
+                #board {
+                    width: 100%;
+                    text-align: center;
+                }
+                #dialogue {
+                    font-size:32px;
+                }
+            </style>
+    </head>
+    <body>
+        <div id="board">
+            <canvas id="canvas"></canvas>
+            <div id="dialogue"></div> 
+        </div>       
+    </body>
+</html>
+
+<script>
+    
+    var canvas, ctx, dialogue;
+    var currentDisplayText = "";
+    var DEFAULT_BACKGROUND_COLOR = "#FFDABF";
+    var images = {}
+    var images_BB = {};
+
+    start() 
+
+// #region Initialization
+    function start() {
+        setUp();
+        resizeCanvas();
+        loadImages();
+        mainMenu();
+    }
+
+    function setUp() {
+        canvas = document.getElementById('canvas');
+        ctx = canvas.getContext("2d");
+        dialogue = document.getElementById("dialogue");
+    }
+
+    function loadImages() {
+        images = {};
+        images_BB = {};
+        images["prefaceHeaven"] = loadPrefaceHeavenIMG();
+        images["workbench"] = loadWorkbenchIMG();
+        images["clock"] = loadClockIMG();
+        loadIngredientImages();
+    }
+// #endregion
+
+// #region Graphics
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+		drawBackground(DEFAULT_BACKGROUND_COLOR);      
+    }
+
+    function resizeCanvas() {
+        canvas.width = 800;
+        canvas.height = 800;
+    }
+
+	function draw() {
+		clearCanvas();  
+		ctx.strokeRect(0, 0, canvas.width, canvas.height);
+	}
+
+    function drawMessage(text, size, x, y, color) {        
+		ctx.font = size + "px Arial";
+        ctx.fillStyle = color;
+		ctx.fillText(text, x, y);
+    }
+
+    function drawBackground(color) {        
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawImage(imgName) {
+        img = images[imgName];
+        ctx.drawImage(img,10,10);
+    }
+// #endregion
+
+// #region Stages
+    function mainMenu() {
+        draw();        
+        drawMessage("Pizza Cat", 75, 235, 300, "black");
+        drawMessage("Press any key!", 35, 285, 390, "black");
+        document.addEventListener("keydown", mainMenuKeyInput);
+    }
+
+    function mainMenuKeyInput(event) {
+        document.removeEventListener("keydown", mainMenuKeyInput);
+        gamePreface();
+    }
+
+    function gamePreface() {
+        draw();
+        drawBackground(images["prefaceHeaven"][0]); // Background color
+        drawImage("prefaceHeaven")
+        writeDialogue(gamePrefaceDialogues)
+        // pizzaCatMakingStart is called at the end of dialogue
+    }     
+
+    function gameOver() {
+        drawBackground(images["prefaceHeaven"][0]); // Background color
+        drawImage("prefaceHeaven")
+        drawMessage("GAME OVER", 85, 150, 400, "white");
+        if (pizzasMade < 5) {
+        writeDialogue(gameOver_1)
+        } else if (pizzasMade < 10) {
+            writeDialogue(gameOver_2)
+        } else if (pizzasMade < 50) {
+            writeDialogue(gameOver_3)
+        } else if (pizzasMade >= 100) {
+            writeDialogue(gameOver_4)
+        }
+    }
+
+// #endregion
+
+// #region Pizza Cat Making    
+    var INGREDIENTS = ["pepperoni", "bacon", "beef", "sausages", "ham", "mushrooms",
+    "cheese", "cucumber", "pineapple", "mayonnaise", "BBQ sauce", "olive oil"];
+    var PIZZA_MAX_RADIUS = 300;
+    var PIZZA_MIN_RADIUS = 150;
+
+    var currentIngredientList = [];
+    var currentPizza = {};
+
+    var mistakes;
+    var MAX_MISTAKES = 5;
+
+    var pizzasMade = 0;
+    
+    function pizzaCatMakingStart() {
+        flyingIngredients = [];
+        newPizza();
+		loopTimeNow = Date.now()
+        loopTimeThen = loopTimeNow;
+        loopDelta = 0;
+        gameState = "looping";
+        gameCount = 0;
+        mistakes = 0;
+        pizzasMade = 0;
+
+		pizzaCatMaking_Draw();
+        writeDialogue(pizzaMakingStartDialogues)
+        // pizzaCatMaking is called at the end of dialogue
+
+        document.addEventListener("click", handleMouseClick);
+    }
+
+    function newPizza() {
+        generateIngredientList();
+        newPizzaBase();
+    }
+
+    function generateIngredientList() {
+        var ingredientsCopy = [];
+        for (var i = 0; i < INGREDIENTS.length; i++) {
+            ingredientsCopy[i] = INGREDIENTS[i];
+        }
+
+        currentIngredientList = [];
+        var i = 0;
+        while (i < 5) {
+            var index = getRandomInt(0, INGREDIENTS.length-1);
+            if (ingredientsCopy[index] != "") {
+                currentIngredientList[i] = ingredientsCopy[index];
+                ingredientsCopy[index] = "";
+                i++;
+            }
+        }
+
+        placedIngredients = [];
+    }
+
+    function newPizzaBase() {
+        currentPizza = {}
+        currentPizza[0] = getRandomInt(PIZZA_MIN_RADIUS, PIZZA_MAX_RADIUS);
+        currentPizza[1] = currentPizza[0] * 0.9;
+    }
+
+    var loopTimeNow, loopTimeThen, loopDelta = 0;
+    var gameState = "new";
+    
+    function pizzaCatMaking() {
+        if (gameState == "over") {
+            gameOver();
+            return;
+        }
+
+		loopTimeNow = Date.now();
+		loopDelta = (loopTimeNow - loopTimeThen)/1000;
+
+		pizzaCatMaking_Update(loopDelta);
+		pizzaCatMaking_Draw();
+
+		loopTimeThen = loopTimeNow;		
+		setTimeout(function() {pizzaCatMaking();}, 50);
+    }
+
+    var gameTimer = 30;
+    var gameCount = 0;
+    var ingredientsSpeed = 80;
+    function pizzaCatMaking_Update(delta) {
+        if (gameState == "new") {
+            pizzasMade++;
+            if (placedIngredients.length <= 0) {
+                mistakes += 2;
+            }
+
+            newPizza();
+            ingredientsSpeed *= 1.10;
+            gameState = "looping";
+            gameCount = 0;
+        }
+
+        if (mistakes >= MAX_MISTAKES) {
+            gameState = "over";
+            return;
+        }
+
+        spawnIngredients(delta);
+        ingredients_Update(delta);
+
+        gameCount += delta;
+        if (gameCount > gameTimer) {
+            gameState = "new";
+        }
+    }
+                        // Position - Direction
+    var SPAWN_POINTS = [ [[-10, 300], [1, 0]],
+                         [[-10, 500], [1, 0]],
+                         [[-10, 700], [1, 0]],
+                         [[810, 400], [-1, 0]],
+                         [[810, 600], [-1, 0]]];
+    var spawnTimer = 0.5;
+    var spawnCount = 0;
+    var flyingIngredients = [];
+    var placedIngredients = [];
+  
+    function spawnIngredients(delta) {
+        spawnCount += delta;
+        if (spawnCount < spawnTimer) {
+            return;
+        }
+
+        spawnCount = 0;
+        var ingredient = newIngredient(ingredientsSpeed);
+        flyingIngredients.push(ingredient);
+    }
+
+    function newIngredient(speed) {
+        var spawnPoint = SPAWN_POINTS[getRandomInt(0, SPAWN_POINTS.length - 1)];
+        var ingredient = {};
+        ingredient["x"] = spawnPoint[0][0]; // Spawn Position X
+        ingredient["y"] =  getRandomInt(spawnPoint[0][1] - 50, spawnPoint[0][1] + 50); // Spawn Position Y
+        ingredient["directionX"] = spawnPoint[1][0]; // Spawn Direction X
+        ingredient["directionY"] = spawnPoint[1][1]; // Spawn Direction Y
+        ingredient["scaleX"] = 20; // Spawn Direction X
+        ingredient["scaleY"] = 20; // Spawn Direction Y
+        ingredient["image"] = INGREDIENTS[getRandomInt(0, INGREDIENTS.length-1)];
+        ingredient["BBox"] = images_BB[ingredient["image"]];
+        ingredient["placed"] = false;
+        ingredient["speed"] = getRandomInt(speed/2, speed * 2);
+        return ingredient;
+    }
+
+    function handleMouseClick(event) {
+        var rect = canvas.getBoundingClientRect();
+        var mouseX = event.clientX - rect.left;
+        var mouseY = event.clientY - rect.top;
+        
+        for (var i = 0; i < flyingIngredients.length; i++) {
+            if (insideBBox(flyingIngredients[i], mouseX, mouseY)) {
+                flyingIngredients[i]["placed"] = true;
+            }
+        }
+    }
+
+    function insideBBox(ingredient, x, y) {
+        var BBox = ingredient["BBox"];
+        var xInside = x >= ingredient["x"] && x <= ingredient["x"] + BBox[0] * ingredient["scaleX"];
+        var yInside = y >= ingredient["y"] && y <= ingredient["y"] + BBox[1] * ingredient["scaleY"];
+        return xInside && yInside;
+    }
+
+    function ingredients_Update(delta) {
+        for (var i = 0; i < flyingIngredients.length; i++) {
+            ingredient_Update(flyingIngredients[i], delta);
+        }
+        
+        for (var i = flyingIngredients.length-1; i >= 0; i--) {
+            if (flyingIngredients[i]["placed"]) {
+                if (currentIngredientList.indexOf(flyingIngredients[i]["image"]) == -1) {
+                    mistakes++;
+                    console.log("Haha! You made a mistake!");
+                }
+                placedIngredients.push(flyingIngredients[i]);
+                flyingIngredients.splice(i, 1);
+            } else if (flyingIngredients[i]["x"] > 800 || flyingIngredients[i]["y"] > 800) {
+                flyingIngredients.splice(i, 1);
+            }
+        }
+    }
+
+    function ingredient_Update(ingredient, delta) {
+        if (ingredient["placed"]) {
+            return;
+        } 
+        ingredient["x"] += ingredient["directionX"] * ingredient["speed"] * delta;
+        ingredient["y"] += ingredient["directionY"] * ingredient["speed"] * delta;
+    }
+
+    function pizzaCatMaking_Draw() {
+        clearCanvas();
+        drawImage("workbench");
+        drawIngredientList();
+        drawInformation();
+        drawPizza();
+        drawIngredients();
+    }
+
+    var CRUST_OUTLINE = "#FFBF90";
+    var CRUST_FILL = "#FFDABF";
+    var TOMATO_OUTLINE = "#ED6B61";
+    var TOMATO_FILL = "#FF9890";
+
+    function drawPizza() {
+        var pizzaX = 400;
+        var pizzaY = 500;
+        drawCirlce(pizzaX, pizzaY, currentPizza[0], CRUST_OUTLINE, CRUST_FILL);
+        drawCirlce(pizzaX, pizzaY, currentPizza[1], TOMATO_OUTLINE, TOMATO_FILL);
+        drawCirlce(pizzaX-50, pizzaY-10, 10, "black", "black");
+        drawCirlce(pizzaX+50, pizzaY-10, 10, "black", "black");
+        drawCirlce(pizzaX, pizzaY+20, 5, "black", "black");
+        drawArc(pizzaX + 25, pizzaY+20, 25, "black", Math.PI);
+        drawArc(pizzaX - 25, pizzaY+20, 25, "black", Math.PI);
+    }
+
+    var CIRCLE_ANGLE = 2*Math.PI;
+    function drawCirlce(x, y, radius, outlineColor, fillColor) {
+        ctx.strokeStyle = outlineColor;    
+        ctx.fillStyle = fillColor;    
+        
+        ctx.beginPath();
+        ctx.arc(x,y,radius,0,CIRCLE_ANGLE);
+        ctx.stroke();
+
+        ctx.fill();
+    }
+
+    function drawArc(x, y, radius, outlineColor, angle) {
+        ctx.strokeStyle = outlineColor;    
+        
+        ctx.beginPath();
+        ctx.arc(x,y,radius,0,angle);
+        ctx.stroke();
+    }
+
+    function drawIngredientList() {
+        var fontSize = 30;
+        var verticalGap = fontSize;
+        for (var i = 0; i < currentIngredientList.length; i++) {
+            var text = capitalizeFirstLetter(currentIngredientList[i]);
+            drawMessage(text, fontSize, 75, 75 + i*verticalGap, "black");
+            drawImageCoord(currentIngredientList[i], 235, 50 + i*verticalGap, 10, 10);
+        }
+    }
+
+    function drawInformation() {
+        var fontSize = 55;
+        drawImage("clock");
+        drawMessage(Math.floor(gameTimer - gameCount), fontSize, 605, 120, "black");
+        drawMessage(pizzasMade + " seeds made!", fontSize/2, 320, 80, "black");
+        drawMessage(mistakes + " mistakes!", fontSize/2, 320, 130, "black");
+    }
+
+    function drawIngredients() {
+        for (var i = 0; i < flyingIngredients.length; i++) {
+            drawIngredient(flyingIngredients[i]);
+        }
+        
+        for (var i = 0; i < placedIngredients.length; i++) {
+            drawIngredient(placedIngredients[i]);
+        }
+    }
+
+    function drawIngredient(ingredient) {
+        drawImageCoord(ingredient["image"], 
+            ingredient["x"], ingredient["y"], 
+            ingredient["scaleX"], ingredient["scaleY"]);
+    }
+
+// #endregion
+
+// #region Dialogue
+    function writeDialogue(dialogue) {
+        dialogueOngoing = true;
+        currentDialogue = dialogue;
+        write(currentDialogue[0])
+        dialogueIndex = 1;
+        document.addEventListener("keydown", writePhrase);
+    }
+
+    function writePhrase(event) {
+        dialogueIndex = dialogueIndex + 1;
+        if (dialogueIndex >= currentDialogue.length - 1) {
+            write("");
+            dialogueOngoing = false;
+            document.removeEventListener("keydown", writePhrase);
+            currentDialogue[currentDialogue.length - 1]();
+            return;
+        }
+        write(currentDialogue[dialogueIndex])
+    }
+
+    function write(text) {
+        dialogue.innerHTML = text;
+    }
+
+    var dialogueOngoing;
+    var dialogueIndex = 0;
+    var currentDialogue;
+    var gamePrefaceDialogues = ["So... you're the new one, huh?", "Ok, welcome then, to the pizza cat heaven!", 
+        "You ask what is this place? Why, the best place in heaven!", "This is where pizza cats are made!", "You and I make sure they are fit for their lucky owners!",
+        "But first, I need to test your skills at pizza cat making. Let's start!",
+        pizzaCatMakingStart];
+
+    var pizzaMakingStartDialogues = ["This is our workbench. This is where pizza cats are made.", "In front of you there's a blank pizza cat seed. Our job is to fill it with the ingredients in the list.", 
+        "Once the seed is ready, eight pizza cats will be born!", "But this is a busy place! There's only so much time we can spend on a seed.", "There you have a clock with a countdown, keep an eye on that.", 
+        "So where are the ingredients? They are floating all around us.", "They will pass in front of you. Click on them to let them fall on the pizza cat seed!", 
+        "The test will end after your fifth mistake, let's see how many pizza cat seeds can you fill!",
+        pizzaCatMaking];
+        
+    var gameOver_1 = ["Maaaaaaaaaaybe this is not for you.", "At least five pizza cat seeds are needed to pass the test.", "Why don't you try again some other time?",
+        start];
+        
+    var gameOver_2 = ["That's okay, you're quite the beginner,", "I would have expected at least ten pizzas in this challenge.", "We'll train you to be the best. Why don't you try again some other time?",
+        start];        
+        
+    var gameOver_3 = ["That's what I call passing the test, all right!", "Welcome to PCSMWH, the Pizza Cat Seed Making Wing of Heaven!", "You have a bright future ahead of you!",
+        start];
+        
+    var gameOver_4 = ["W-What... I can't believe my eyes.", "You actually broke PCSMWH's record...", "I mean, they should probably give you my job or something...", "L-Let's do it again, ok? Let's pretend this didn't happen...",        start];
+// #endregion
+
+// #region Images
+    function drawImage(imgName) {
+        var img = images[imgName]
+        for (var i = 1; i < img.length; i++) {
+            drawPiece(img[i]);
+        }
+    }
+
+    function drawImageCoord(imgName, x, y, scaleX, scaleY) {
+        var img = [DEFAULT_BACKGROUND_COLOR, placeImage(images[imgName], x, y, scaleX, scaleY)];
+        drawPiece(img[1]);
+    }
+
+    function drawPiece(piece) {        
+        for (var i = 0; i < piece.length; i++) { 
+            ctx.strokeStyle = piece[i][0];    
+            ctx.fillStyle = piece[i][1];    
+
+            ctx.beginPath();     
+            ctx.moveTo(piece[i][2][0], piece[i][2][1]);
+            for (var j = 3; j < piece[i].length; j++) {  
+                ctx.lineTo(piece[i][j][0], piece[i][j][1]);     
+            }  
+            ctx.stroke();
+
+            if (piece[i][2][0] == piece[i][piece[i].length - 1][0] && piece[i][2][1] == piece[i][piece[i].length - 1][1]) {
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+    }
+
+    function loadPrefaceHeavenIMG() {
+        var img = [];
+        img[0] = "#A7B8D8";
+
+        var pizzaSlice = [["#FFBF90", "#FFDABF",[3, 0], [4, 1], [1, 5], [0, 4], [3, 0]] , /* Crust */
+                          ["#ED6B61", "#FF9890",[4, 1], [6, 7], [1, 5], [4, 1]] /* Tomato */ ];
+        
+        var cloud = [["#6BADBC", "#C2D5D9", [1.5,1.5], [3,1], [4,1], [5, 1.5], [5.5,3], [5,4], [6, 3], 
+        [7,3], [8,3.5], [9,4.5], [9,5], [9,6], [8,7],
+         [1,7], [0.2, 6.7], [0,6], [0.4, 5.3], [1,5], [2,5], [1.5, 4.5], [1, 3.5], [1, 2.3], [1.5,1.5]]];
+
+        img[1] = placeImage(cloud, 10, 20, 30, 30);
+        img[2] = placeImage(cloud, 850, 150, -50, 50);
+        img[3] = placeImage(cloud, -100, 430, 70, 50);
+
+        img[4] = placeImage(pizzaSlice, 50, 50, 10, 10);
+        img[5] = placeImage(pizzaSlice, 350, 150, -15, 15);
+        img[6] = placeImage(pizzaSlice, 130, 350, 5, -5);
+        img[7] = placeImage(pizzaSlice, 100, 500, 45, 30);
+        img[8] = placeImage(pizzaSlice, 750, 235, -60, 40);
+        img[9] = placeImage(pizzaSlice, 750, 650, -30, 15);
+        img[10] = placeImage(pizzaSlice, 430, 600, 6, 4);
+        img[11] = placeImage(pizzaSlice, 750, 50, -15, 15);
+        return img;
+    }
+
+    function loadWorkbenchIMG() {
+        var img = [];
+        img[0] = DEFAULT_BACKGROUND_COLOR;
+        img[1] = [["#804128", "#9C6A56",[0, 200], [800, 200], [800, 800], [0, 800], [0, 200]]];
+        return img;
+    }
+
+    function loadClockIMG() {
+        var img = [];
+        img[0] = DEFAULT_BACKGROUND_COLOR;
+        img[1] = [["#311E79", "#7665B6",[550, 50], [720, 50], [720, 150], [550, 150], [550, 50]]];
+        img[2] = [["#311E79", "#E1DEE9",[570, 70], [700, 70], [700, 130], [570, 130], [570, 70]]];
+        return img;
+    }
+
+    function loadIngredientImages() {
+        var pixelCirle = [[1,0], [2,0], [3,1], [3,2], [2,3], [1,3], [0,2], [0,1], [1,0]];
+        var pixelDrop = [[1,0], [2,2], [1,3], [0,2], [1,0]];
+
+        images["pepperoni"] = [["#A50C00", "#FF483A",[1,0], [2,0], [3,1], [3,2], [2,3], [1,3], [0,2], [0,1], [1,0]]];
+        images_BB["pepperoni"] = [3, 3];
+        images["bacon"] = [["#A50C00", "#FF483A",[3, 0], [4, 0], [3, 2], [2, 2], [1, 3], [0, 2], [1,1], [2, 1], [3,0]]];
+        images_BB["bacon"] = [4, 4];
+        images["beef"] = [["#A53100", "#FF753A",[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]];
+        images_BB["beef"] = [2, 2];
+        images["sausages"] = [["#A53100", "#FF753A",[1,0], [2,0], [3,1], [3,2], [2,3], [1,3], [0,2], [0,1], [1,0]]];
+        images_BB["sausages"] = [2, 2];
+        images["ham"] = [["#D45B90", "#F17EB0",[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]];
+        images_BB["ham"] = [2, 2];
+        images["mushrooms"] = [["#532F18", "#907766",[1,0], [2,0], [3,1], [3,2], [2,2], [2,3], [1,3], [1,2], [0,2], [0,1], [1,0]]];
+        images_BB["mushrooms"] = [2, 2];
+        images["cheese"] = [["#614600", "#C49A2D",[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]];
+        images_BB["cheese"] = [2, 2];
+        images["cucumber"] = [["#6B991C", "#C6EC84",[1,0], [2,0], [3,1], [3,2], [2,3], [1,3], [0,2], [0,1], [1,0]]];
+        images_BB["cucumber"] = [3, 3];
+        images["pineapple"] = [["#A58E1E", "#FFEC8E",[1,0], [2,0], [3,1], [3,2], [2,3], [1,3], [0,2], [0,1], [1,0]]];
+        images_BB["pineapple"] = [3, 3];
+        images["mayonnaise"] = [["#A58E1E", "#FFEC8E", [1,0], [2,2], [1,3], [0,2], [1,0]]];
+        images_BB["mayonnaise"] = [2, 3];
+        images["BBQ sauce"] = [["#A53100", "#FF753A",[1,0], [2,2], [1,3], [0,2], [1,0]]];
+        images_BB["BBQ sauce"] = [2, 3];
+        images["olive oil"] = [["#614600", "#C49A2D",[1,0], [2,2], [1,3], [0,2], [1,0]]];
+        images_BB["olive oil"] = [2, 3];
+    }
+
+    function placeImage(original, x, y, scaleX, scaleY) { 
+        var copy = [];
+        for (var p = 0; p < original.length; p++) {
+            var originalPiece = original[p];
+            var piece = [];
+
+            piece[0] = originalPiece[0];
+            piece[1] = originalPiece[1];
+            for (var i = 2; i < originalPiece.length; i++) {  
+                piece[i] = [];
+                piece[i][0] = x + original[p][i][0] * scaleX;
+                piece[i][1] = y + original[p][i][1] * scaleY;
+            }
+            copy[p] = piece;
+        }
+        return copy;
+    }
+
+// #endregion
+
+// #region Utils
+    function getRandomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+    function capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+// #endregion
+</script>
